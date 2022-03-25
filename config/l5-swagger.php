@@ -128,6 +128,11 @@ return [
             ],
 
             /**
+             * Define after which Open Api's processors we want to happens the custom one.
+             */
+            'append-processors-after' => \OpenApi\Processors\BuildPaths::class,
+
+            /**
              * pattern: string       $pattern File pattern(s) to scan (default: *.php) .
              *
              * @see \OpenApi\scan

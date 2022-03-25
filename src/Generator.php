@@ -194,12 +194,14 @@ class Generator
     {
         $options = [];
 
+        $appendProcessorAfterClass = $this->scanOptions['append-processors-after'] ?? \OpenApi\Processors\BuildPaths::class;
+
         $processorClasses = Arr::get($this->scanOptions, self::SCAN_OPTION_PROCESSORS, []);
         $processors = [];
 
         foreach (\OpenApi\Analysis::processors() as $processor) {
             $processors[] = $processor;
-            if ($processor instanceof \OpenApi\Processors\BuildPaths) {
+            if ($processor instanceof $appendProcessorAfterClass) {
                 foreach ($processorClasses as $customProcessor) {
                     $processors[] = new $customProcessor();
                 }
