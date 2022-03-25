@@ -1,5 +1,5 @@
 {
-  "name": "darkaonline/l5-swagger",
+  "name": "folksyfolks/l5-swagger",
   "description": "OpenApi or Swagger integration to Laravel",
   "keywords": [
     "laravel",
@@ -21,8 +21,8 @@
   "require": {
     "php": "^7.2 || ^8.0",
     "laravel/framework": "^9.0 || >=8.40.0 || ^7.0",
-    "zircote/swagger-php": "^3.2 || ^4.0",
-    "swagger-api/swagger-ui": "^3.0 || ^4.0",
+    "zircote/swagger-php": "3.*",
+    "swagger-api/swagger-ui": "^3.0",
     "symfony/yaml": "^5.0",
     "ext-json": "*"
   },
