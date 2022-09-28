@@ -19,8 +19,8 @@
     }
   ],
   "require": {
-    "php": "^7.2 || ^8.0",
-    "laravel/framework": ">=8.40.0 || ^7.0",
+    "php": "~8.0",
+    "laravel/framework": ">=v9.0.0",
     "zircote/swagger-php": "3.*",
     "swagger-api/swagger-ui": "^3.0",
     "symfony/yaml": "^5.0",
