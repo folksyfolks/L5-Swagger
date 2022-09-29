@@ -23,7 +23,7 @@
     "laravel/framework": ">=v9.0.0",
     "zircote/swagger-php": "3.*",
     "swagger-api/swagger-ui": "^3.0",
-    "symfony/yaml": "^5.0",
+    "symfony/yaml": "^6.1.4",
     "ext-json": "*"
   },
   "require-dev": {
