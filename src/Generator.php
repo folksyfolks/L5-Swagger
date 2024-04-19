@@ -3,8 +3,8 @@
 namespace L5Swagger;
 
 use Exception;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\File;
 use L5Swagger\Exceptions\L5SwaggerException;
 use OpenApi\Annotations\OpenApi;
 use OpenApi\Annotations\Server;
@@ -16,6 +16,8 @@ use Symfony\Component\Yaml\Yaml;
 
 class Generator
 {
+    public const OPEN_API_DEFAULT_SPEC_VERSION = '3.0.0';
+
     protected const SCAN_OPTION_PROCESSORS = 'processors';
     protected const SCAN_OPTION_PATTERN = 'pattern';
     protected const SCAN_OPTION_ANALYSER = 'analyser';
@@ -85,6 +87,11 @@ class Generator
     protected $scanOptions;
 
     /**
+     * @var ?Filesystem
+     */
+    protected $fileSystem;
+
+    /**
      * Generator constructor.
      *
      * @param  array  $paths
@@ -98,7 +105,8 @@ class Generator
         array $constants,
         bool $yamlCopyRequired,
         SecurityDefinitions $security,
-        array $scanOptions
+        array $scanOptions,
+        ?Filesystem $filesystem = null
     ) {
         $this->annotationsDir = $paths['annotations'];
         $this->docDir = $paths['docs'];
@@ -110,6 +118,8 @@ class Generator
         $this->yamlCopyRequired = $yamlCopyRequired;
         $this->security = $security;
         $this->scanOptions = $scanOptions;
+
+        $this->fileSystem = $filesystem ?? new Filesystem();
     }
 
     /**
@@ -134,15 +144,15 @@ class Generator
      */
     protected function prepareDirectory(): self
     {
-        if (File::exists($this->docDir) && ! File::isWritable($this->docDir)) {
+        if ($this->fileSystem->exists($this->docDir) && ! $this->fileSystem->isWritable($this->docDir)) {
             throw new L5SwaggerException('Documentation storage directory is not writable');
         }
 
-        if (! File::exists($this->docDir)) {
-            File::makeDirectory($this->docDir);
+        if (! $this->fileSystem->exists($this->docDir)) {
+            $this->fileSystem->makeDirectory($this->docDir);
         }
 
-        if (! File::exists($this->docDir)) {
+        if (! $this->fileSystem->exists($this->docDir)) {
             throw new L5SwaggerException('Documentation storage directory could not be created');
         }
 
@@ -192,6 +202,13 @@ class Generator
     {
         $generator = new OpenApiGenerator();
 
+        // OpenApi spec version - only from zircote/swagger-php 4
+        if (method_exists($generator, 'setVersion')) {
+            $generator->setVersion(
+                $this->scanOptions['open_api_spec_version'] ?? self::OPEN_API_DEFAULT_SPEC_VERSION
+            );
+        }
+
         // Processors.
         $this->setProcessors($generator);
 
@@ -208,6 +225,7 @@ class Generator
     protected function setProcessors(OpenApiGenerator $generator): void
     {
         $appendProcessorAfterClass = $this->scanOptions['append-processors-after'] ?? \OpenApi\Processors\BuildPaths::class;
+
         $processorClasses = Arr::get($this->scanOptions, self::SCAN_OPTION_PROCESSORS, []);
         $processors = [];
 
@@ -294,13 +312,13 @@ class Generator
     {
         if ($this->yamlCopyRequired) {
             $yamlDocs = (new YamlDumper(2))->dump(
-                json_decode(file_get_contents($this->docsFile), true),
+                json_decode($this->fileSystem->get($this->docsFile), true),
                 20,
                 0,
                 Yaml::DUMP_OBJECT_AS_MAP ^ Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE
             );
 
-            file_put_contents(
+            $this->fileSystem->put(
                 $this->yamlDocsFile,
                 $yamlDocs
             );

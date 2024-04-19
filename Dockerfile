@@ -1,7 +1,7 @@
 #
 # Base install
 #
-FROM amd64/php:8.0-apache as base
+FROM amd64/php:8.2-apache as base
 
 LABEL vendor="L5 Swagger"
 
@@ -60,9 +60,11 @@ WORKDIR /app/l5-swagger-app
 
 RUN /usr/local/bin/php -dxdebug.mode=off /usr/local/bin/composer config repositories.l5-swagger path '../'
 
-RUN /usr/local/bin/php -dxdebug.mode=off /usr/local/bin/composer require 'DarkaOnLine/l5-swagger:dev-master'
+RUN /usr/local/bin/php -dxdebug.mode=off /usr/local/bin/composer require 'darkaonline/l5-swagger:dev-master'
 
-RUN ln -s /app/tests/storage/annotations/ app/annotations
+RUN cp -r /app/tests/storage/annotations /app/l5-swagger-app/app/Annotations
+
+RUN for f in $(find app/Annotations/* -name '*.php'); do sed -i 's/namespace Tests\\storage\\annotations/namespace App\\Annotations/' $f; done
 
 RUN chown -R $user:$user .
 #

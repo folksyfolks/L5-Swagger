@@ -3,13 +3,15 @@
 namespace Tests;
 
 use Illuminate\Http\Request;
-use Illuminate\Support\Facades\File;
 use L5Swagger\Exceptions\L5SwaggerException;
 use OpenApi\Analysers\TokenAnalyser;
 use OpenApi\Processors\CleanUnmerged;
 use Symfony\Component\Yaml\Parser;
 use Symfony\Component\Yaml\Yaml;
 
+/**
+ * @testdox Generator
+ */
 class GeneratorTest extends TestCase
 {
     /** @test **/
@@ -20,19 +22,22 @@ class GeneratorTest extends TestCase
         $config = $this->configFactory->documentationConfig();
         $docs = $config['paths']['docs'];
 
-        File::shouldReceive('exists')
-            ->once()
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('exists')
             ->with($docs)
-            ->andReturn(true);
+            ->willReturn(true);
 
-        File::shouldReceive('isWritable')
-            ->once()
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('isWritable')
             ->with($docs)
-            ->andReturn(false);
+            ->willReturn(false);
 
         $this->expectException(L5SwaggerException::class);
         $this->expectExceptionMessage('Documentation storage directory is not writable');
 
+        $this->makeGeneratorWithMockedFileSystem();
         $this->generator->generateDocs();
     }
 
@@ -44,22 +49,26 @@ class GeneratorTest extends TestCase
         $config = $this->configFactory->documentationConfig();
         $docs = $config['paths']['docs'];
 
-        File::shouldReceive('exists')
-            ->times(3)
+        $this->fileSystem
+            ->expects($this->exactly(3))
+            ->method('exists')
             ->with($docs)
-            ->andReturnValues([true, false, true]);
+            ->willReturnOnConsecutiveCalls(true, false, true);
 
-        File::shouldReceive('isWritable')
-            ->once()
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('isWritable')
             ->with($docs)
-            ->andReturn(true);
+            ->willReturn(true);
 
-        File::shouldReceive('makeDirectory')
-            ->once()
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('makeDirectory')
             ->with($docs);
 
         mkdir($docs, 0777);
 
+        $this->makeGeneratorWithMockedFileSystem();
         $this->generator->generateDocs();
     }
 
@@ -71,23 +80,27 @@ class GeneratorTest extends TestCase
         $config = $this->configFactory->documentationConfig();
         $docs = $config['paths']['docs'];
 
-        File::shouldReceive('exists')
-            ->times(3)
+        $this->fileSystem
+            ->expects($this->exactly(3))
+            ->method('exists')
             ->with($docs)
-            ->andReturnValues([true, false, false]);
+            ->willReturnOnConsecutiveCalls(true, false, false);
 
-        File::shouldReceive('isWritable')
-            ->once()
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('isWritable')
             ->with($docs)
-            ->andReturn(true);
+            ->willReturn(true);
 
-        File::shouldReceive('makeDirectory')
-            ->once()
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('makeDirectory')
             ->with($docs);
 
         $this->expectException(L5SwaggerException::class);
         $this->expectExceptionMessage('Documentation storage directory could not be created');
 
+        $this->makeGeneratorWithMockedFileSystem();
         $this->generator->generateDocs();
     }
 
@@ -161,6 +174,7 @@ class GeneratorTest extends TestCase
 
         $cfg['scanOptions']['pattern'] = 'L5SwaggerAnnotationsExample*.*';
         $cfg['scanOptions']['analyser'] = new TokenAnalyser;
+        $cfg['scanOptions']['open_api_spec_version'] = '3.1.0';
         $cfg['scanOptions']['processors'] = [
             new CleanUnmerged,
         ];
@@ -179,8 +193,10 @@ class GeneratorTest extends TestCase
 
         $this->assertTrue(file_exists($this->jsonDocsFile()));
 
-        $this->get(route('l5-swagger.default.docs'))
-            ->assertSee('L5 Swagger')
+        $response = $this->get(route('l5-swagger.default.docs'));
+
+        $response->assertSee('L5 Swagger')
+            ->assertSee('3.1.0')
             ->assertSee('my-default-host.com')
             ->assertSee('getProjectsList')
             ->assertSee('getProductsList')
