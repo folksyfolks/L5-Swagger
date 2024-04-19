@@ -19,17 +19,18 @@
     }
   ],
   "require": {
-    "php": "~8.0",
-    "laravel/framework": ">=v9.0.0",
-    "zircote/swagger-php": "3.*",
-    "swagger-api/swagger-ui": "^3.0",
-    "symfony/yaml": "<=6.0.0",
-    "ext-json": "*"
+    "php": "^7.2 || ^8.0",
+    "laravel/framework": "^11.0 || ^10.0 || ^9.0 || >=8.40.0 || ^7.0",
+    "zircote/swagger-php": "^3.2.0 || ^4.0.0",
+    "swagger-api/swagger-ui": "^3.0 || >=4.1.3",
+    "symfony/yaml": "^5.0 || ^6.0 || ^7.0",
+    "ext-json": "*",
+    "doctrine/annotations": "^1.0 || ^2.0"
   },
   "require-dev": {
-    "phpunit/phpunit": "9.*",
+    "phpunit/phpunit": "^11.0 || ^10.0 || ^9.5",
     "mockery/mockery": "1.*",
-    "orchestra/testbench": "6.* || 5.*",
+    "orchestra/testbench": "^9.0 || ^8.0 || 7.* || ^6.15 || 5.*",
     "php-coveralls/php-coveralls": "^2.0"
   },
   "autoload": {
@@ -58,6 +59,6 @@
   "minimum-stability": "dev",
   "prefer-stable": true,
   "scripts": {
-    "phpunit": "vendor/bin/phpunit"
+    "phpunit": "vendor/bin/phpunit --testdox"
   }
 }
