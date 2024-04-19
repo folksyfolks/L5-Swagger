@@ -3,18 +3,21 @@
 namespace L5Swagger;
 
 use Exception;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Arr;
-use Illuminate\Support\Facades\File;
 use L5Swagger\Exceptions\L5SwaggerException;
 use OpenApi\Annotations\OpenApi;
 use OpenApi\Annotations\Server;
 use OpenApi\Generator as OpenApiGenerator;
 use OpenApi\Util;
+use Symfony\Component\Finder\Finder;
 use Symfony\Component\Yaml\Dumper as YamlDumper;
 use Symfony\Component\Yaml\Yaml;
 
 class Generator
 {
+    public const OPEN_API_DEFAULT_SPEC_VERSION = '3.0.0';
+
     protected const SCAN_OPTION_PROCESSORS = 'processors';
     protected const SCAN_OPTION_PATTERN = 'pattern';
     protected const SCAN_OPTION_ANALYSER = 'analyser';
@@ -84,6 +87,11 @@ class Generator
     protected $scanOptions;
 
     /**
+     * @var ?Filesystem
+     */
+    protected $fileSystem;
+
+    /**
      * Generator constructor.
      *
      * @param  array  $paths
@@ -97,7 +105,8 @@ class Generator
         array $constants,
         bool $yamlCopyRequired,
         SecurityDefinitions $security,
-        array $scanOptions
+        array $scanOptions,
+        ?Filesystem $filesystem = null
     ) {
         $this->annotationsDir = $paths['annotations'];
         $this->docDir = $paths['docs'];
@@ -109,6 +118,8 @@ class Generator
         $this->yamlCopyRequired = $yamlCopyRequired;
         $this->security = $security;
         $this->scanOptions = $scanOptions;
+
+        $this->fileSystem = $filesystem ?? new Filesystem();
     }
 
     /**
@@ -133,15 +144,15 @@ class Generator
      */
     protected function prepareDirectory(): self
     {
-        if (File::exists($this->docDir) && ! is_writable($this->docDir)) {
+        if ($this->fileSystem->exists($this->docDir) && ! $this->fileSystem->isWritable($this->docDir)) {
             throw new L5SwaggerException('Documentation storage directory is not writable');
         }
 
-        if (! File::exists($this->docDir)) {
-            File::makeDirectory($this->docDir);
+        if (! $this->fileSystem->exists($this->docDir)) {
+            $this->fileSystem->makeDirectory($this->docDir);
         }
 
-        if (! File::exists($this->docDir)) {
+        if (! $this->fileSystem->exists($this->docDir)) {
             throw new L5SwaggerException('Documentation storage directory could not be created');
         }
 
@@ -171,35 +182,54 @@ class Generator
      */
     protected function scanFilesForDocumentation(): self
     {
-        $options = $this->getScanOptions();
+        $generator = $this->createOpenApiGenerator();
+        $finder = $this->createScanFinder();
 
-        $this->openApi = OpenApiGenerator::scan(
-            Util::finder(
-                $this->annotationsDir,
-                $options[self::SCAN_OPTION_EXCLUDE] ?? null,
-                $options[self::SCAN_OPTION_PATTERN] ?? null
-            ),
-            $options
-        );
+        // Analysis.
+        $analysis = Arr::get($this->scanOptions, self::SCAN_OPTION_ANALYSIS);
+
+        $this->openApi = $generator->generate($finder, $analysis);
 
         return $this;
     }
 
     /**
-     * Prepares options array for scanning files.
+     * Prepares generator for generating the documentation.
      *
-     * @return array
+     * @return OpenApiGenerator $generator
      */
-    protected function getScanOptions(): array
+    protected function createOpenApiGenerator(): OpenApiGenerator
     {
-        $options = [];
+        $generator = new OpenApiGenerator();
 
+        // OpenApi spec version - only from zircote/swagger-php 4
+        if (method_exists($generator, 'setVersion')) {
+            $generator->setVersion(
+                $this->scanOptions['open_api_spec_version'] ?? self::OPEN_API_DEFAULT_SPEC_VERSION
+            );
+        }
+
+        // Processors.
+        $this->setProcessors($generator);
+
+        // Analyser.
+        $this->setAnalyser($generator);
+
+        return $generator;
+    }
+
+    /**
+     * @param  OpenApiGenerator  $generator
+     * @return void
+     */
+    protected function setProcessors(OpenApiGenerator $generator): void
+    {
         $appendProcessorAfterClass = $this->scanOptions['append-processors-after'] ?? \OpenApi\Processors\BuildPaths::class;
 
         $processorClasses = Arr::get($this->scanOptions, self::SCAN_OPTION_PROCESSORS, []);
         $processors = [];
 
-        foreach (\OpenApi\Analysis::processors() as $processor) {
+        foreach ($generator->getProcessors() as $processor) {
             $processors[] = $processor;
             if ($processor instanceof $appendProcessorAfterClass) {
                 foreach ($processorClasses as $customProcessor) {
@@ -209,20 +239,36 @@ class Generator
         }
 
         if (! empty($processors)) {
-            $options[self::SCAN_OPTION_PROCESSORS] = $processors;
+            $generator->setProcessors($processors);
         }
+    }
 
-        foreach (self::AVAILABLE_SCAN_OPTIONS as $optionKey) {
-            $option = Arr::get($this->scanOptions, $optionKey);
-            if (! empty($option)) {
-                $options[$optionKey] = $option;
-            }
+    /**
+     * @param  OpenApiGenerator  $generator
+     * @return void
+     */
+    protected function setAnalyser(OpenApiGenerator $generator): void
+    {
+        $analyser = Arr::get($this->scanOptions, self::SCAN_OPTION_ANALYSER);
+
+        if (! empty($analyser)) {
+            $generator->setAnalyser($analyser);
         }
+    }
 
-        // `scanOptions.exclude` option overwrites `paths.excludes` option but fallbacks to old config if not set
-        $options[self::SCAN_OPTION_EXCLUDE] = ! empty($options[self::SCAN_OPTION_EXCLUDE]) ? $options[self::SCAN_OPTION_EXCLUDE] : $this->excludedDirs;
+    /**
+     * Prepares finder for determining relevant files.
+     *
+     * @return Finder
+     */
+    protected function createScanFinder(): Finder
+    {
+        $pattern = Arr::get($this->scanOptions, self::SCAN_OPTION_PATTERN);
+        $exclude = Arr::get($this->scanOptions, self::SCAN_OPTION_EXCLUDE);
 
-        return $options;
+        $exclude = ! empty($exclude) ? $exclude : $this->excludedDirs;
+
+        return Util::finder($this->annotationsDir, $exclude, $pattern);
     }
 
     /**
@@ -266,13 +312,13 @@ class Generator
     {
         if ($this->yamlCopyRequired) {
             $yamlDocs = (new YamlDumper(2))->dump(
-                json_decode(file_get_contents($this->docsFile), true),
+                json_decode($this->fileSystem->get($this->docsFile), true),
                 20,
                 0,
                 Yaml::DUMP_OBJECT_AS_MAP ^ Yaml::DUMP_EMPTY_ARRAY_AS_SEQUENCE
             );
 
-            file_put_contents(
+            $this->fileSystem->put(
                 $this->yamlDocsFile,
                 $yamlDocs
             );

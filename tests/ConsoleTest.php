@@ -2,28 +2,37 @@
 
 namespace Tests;
 
+use Illuminate\Contracts\Filesystem\FileNotFoundException;
+use Illuminate\Filesystem\Filesystem;
 use Illuminate\Support\Facades\Artisan;
 use L5Swagger\Exceptions\L5SwaggerException;
 
+/**
+ * @testdox Console commands
+ */
 class ConsoleTest extends TestCase
 {
     /**
      * @test
+     *
      * @dataProvider provideGenerateCommands
      *
      * @param  string  $artisanCommand
      *
      * @throws L5SwaggerException
+     * @throws FileNotFoundException
      */
     public function canGenerate(string $artisanCommand): void
     {
+        $fileSystem = new Filesystem();
+
         $this->setAnnotationsPath();
 
         Artisan::call($artisanCommand);
 
         $this->assertFileExists($this->jsonDocsFile());
 
-        $fileContent = file_get_contents($this->jsonDocsFile());
+        $fileContent = $fileSystem->get($this->jsonDocsFile());
 
         $this->assertJson($fileContent);
         $this->assertStringContainsString('L5 Swagger', $fileContent);
@@ -32,7 +41,7 @@ class ConsoleTest extends TestCase
     /**
      * @return iterable
      */
-    public function provideGenerateCommands(): iterable
+    public static function provideGenerateCommands(): iterable
     {
         yield 'default' => [
             'artisanCommand' => 'l5-swagger:generate',
@@ -49,11 +58,12 @@ class ConsoleTest extends TestCase
      */
     public function canPublish(): void
     {
+        $fileSystem = new Filesystem();
         Artisan::call('vendor:publish', ['--provider' => 'L5Swagger\L5SwaggerServiceProvider']);
 
         $config = $this->configFactory->documentationConfig();
 
-        $this->assertTrue(file_exists(config_path('l5-swagger.php')));
-        $this->assertTrue(file_exists($config['paths']['views'].'/index.blade.php'));
+        $this->assertTrue($fileSystem->exists(config_path('l5-swagger.php')));
+        $this->assertTrue($fileSystem->exists($config['paths']['views'].'/index.blade.php'));
     }
 }

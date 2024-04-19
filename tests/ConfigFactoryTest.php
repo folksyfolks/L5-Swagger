@@ -4,12 +4,15 @@ namespace Tests;
 
 use L5Swagger\Exceptions\L5SwaggerException;
 
+/**
+ * @testdox Configuration factory
+ */
 class ConfigFactoryTest extends TestCase
 {
     /**
      * @test
      */
-    public function ifThrowsExceptionIfDocumentationConfigNotFound(): void
+    public function itThrowsExceptionIfDocumentationConfigNotFound(): void
     {
         $config = config('l5-swagger');
         unset($config['documentations']['default']);
@@ -23,6 +26,7 @@ class ConfigFactoryTest extends TestCase
 
     /**
      * @test
+     *
      * @dataProvider configDataProvider
      *
      * @param  array  $data
@@ -54,7 +58,7 @@ class ConfigFactoryTest extends TestCase
         $this->assertArraySimilar($config, $assert);
     }
 
-    public function configDataProvider(): array
+    public static function configDataProvider(): array
     {
         return [
             [

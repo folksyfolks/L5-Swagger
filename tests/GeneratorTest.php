@@ -4,9 +4,14 @@ namespace Tests;
 
 use Illuminate\Http\Request;
 use L5Swagger\Exceptions\L5SwaggerException;
+use OpenApi\Analysers\TokenAnalyser;
+use OpenApi\Processors\CleanUnmerged;
 use Symfony\Component\Yaml\Parser;
 use Symfony\Component\Yaml\Yaml;
 
+/**
+ * @testdox Generator
+ */
 class GeneratorTest extends TestCase
 {
     /** @test **/
@@ -17,15 +22,86 @@ class GeneratorTest extends TestCase
         $config = $this->configFactory->documentationConfig();
         $docs = $config['paths']['docs'];
 
-        mkdir($docs, 0555);
-        chmod($docs, 0555);
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('exists')
+            ->with($docs)
+            ->willReturn(true);
+
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('isWritable')
+            ->with($docs)
+            ->willReturn(false);
 
         $this->expectException(L5SwaggerException::class);
         $this->expectExceptionMessage('Documentation storage directory is not writable');
 
+        $this->makeGeneratorWithMockedFileSystem();
         $this->generator->generateDocs();
+    }
 
-        chmod($docs, 0777);
+    /** @test **/
+    public function itWillCreateDocumentationDirIfItIsWritable(): void
+    {
+        $this->setAnnotationsPath();
+
+        $config = $this->configFactory->documentationConfig();
+        $docs = $config['paths']['docs'];
+
+        $this->fileSystem
+            ->expects($this->exactly(3))
+            ->method('exists')
+            ->with($docs)
+            ->willReturnOnConsecutiveCalls(true, false, true);
+
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('isWritable')
+            ->with($docs)
+            ->willReturn(true);
+
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('makeDirectory')
+            ->with($docs);
+
+        mkdir($docs, 0777);
+
+        $this->makeGeneratorWithMockedFileSystem();
+        $this->generator->generateDocs();
+    }
+
+    /** @test **/
+    public function itThrowsExceptionIfDocumentationDirWasNotCreated(): void
+    {
+        $this->setAnnotationsPath();
+
+        $config = $this->configFactory->documentationConfig();
+        $docs = $config['paths']['docs'];
+
+        $this->fileSystem
+            ->expects($this->exactly(3))
+            ->method('exists')
+            ->with($docs)
+            ->willReturnOnConsecutiveCalls(true, false, false);
+
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('isWritable')
+            ->with($docs)
+            ->willReturn(true);
+
+        $this->fileSystem
+            ->expects($this->once())
+            ->method('makeDirectory')
+            ->with($docs);
+
+        $this->expectException(L5SwaggerException::class);
+        $this->expectExceptionMessage('Documentation storage directory could not be created');
+
+        $this->makeGeneratorWithMockedFileSystem();
+        $this->generator->generateDocs();
     }
 
     /** @test */
@@ -96,7 +172,12 @@ class GeneratorTest extends TestCase
             __DIR__.'/storage/annotations/OpenApi/Clients',
         ];
 
-        $cfg['scanOptions']['pattern'] = 'Anotations.*';
+        $cfg['scanOptions']['pattern'] = 'L5SwaggerAnnotationsExample*.*';
+        $cfg['scanOptions']['analyser'] = new TokenAnalyser;
+        $cfg['scanOptions']['open_api_spec_version'] = '3.1.0';
+        $cfg['scanOptions']['processors'] = [
+            new CleanUnmerged,
+        ];
 
         config(['l5-swagger' => [
             'default' => 'default',
@@ -112,11 +193,13 @@ class GeneratorTest extends TestCase
 
         $this->assertTrue(file_exists($this->jsonDocsFile()));
 
-        $this->get(route('l5-swagger.default.docs'))
-            ->assertSee('L5 Swagger')
+        $response = $this->get(route('l5-swagger.default.docs'));
+
+        $response->assertSee('L5 Swagger')
+            ->assertSee('3.1.0')
             ->assertSee('my-default-host.com')
             ->assertSee('getProjectsList')
-            ->assertDontSee('getProductsList')
+            ->assertSee('getProductsList')
             ->assertDontSee('getClientsList')
             ->assertStatus(200);
     }
